@@ -24,7 +24,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
+#include <glm/trigonometric.hpp>
 
 using namespace gl;
 using namespace glbinding;
@@ -79,7 +79,7 @@ void resize(GLFWwindow * /*window*/, int width, int height)
 
 	glViewport(0, 0, width, height);
 
-	projection = glm::perspective(45.0f, static_cast<GLfloat>(width) / static_cast<GLfloat>(height), 2.0f, 10.0f);
+	projection = glm::perspective(45.0f, static_cast<GLfloat>(width) / static_cast<GLfloat>(height), 0.1f, 1000.0f);
 }
 
 
@@ -90,12 +90,15 @@ void init()
 	shader.LoadFromFile(GL_VERTEX_SHADER, vert_file);
 	shader.LoadFromFile(GL_FRAGMENT_SHADER, frag_file);
 	shader.CreateAndLinkProgram();
-	//shader.Use();
-	//{
-	//
-	//
-	//}
-	//shader.UnUse();
+	shader.Use();
+	{
+		shader.AddUniform("MVP");
+		shader.AddUniform("Color");
+		shader.AddAttribute("vertex");
+		shader.AddAttribute("normal");
+		shader.AddAttribute("color");
+	}
+	shader.UnUse();
 
 	typedef struct { float x, y, z; } xyz;
 	typedef struct { float r, g, b, a; } rgba;
@@ -119,8 +122,6 @@ void init()
 	cube =  new VertexBuffer("vertex:3f,normal:3f,color:4f");
 	cube->push_back(vertices, 24, indices, 24);
 	
-
-
 	projection = glm::mat4(1.0);
 	model = glm::mat4(1.0);
 	view = glm::mat4(1.0);
@@ -153,19 +154,20 @@ void display(GLFWwindow* window)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	model = glm::mat4(1);
-	model = glm::rotate(model, theta, glm::vec3(0, 0, 1));
-	model = glm::rotate(model, phi, glm::vec3(0, 1, 0));
+	model = glm::rotate(model, glm::radians(theta), glm::vec3(0, 0, 1));
+	model = glm::rotate(model, glm::radians(phi), glm::vec3(0, 1, 0));
 	//model = glm::translate(model, glm::vec3(0.0, 0.0, -5.0) );
+
+	//view = glm::lookAt(glm::vec3(0,0,-1), glm::vec3(0,0,0), glm::vec3(0,1,0));
 
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_POLYGON_OFFSET_FILL);
 
+	glm::mat4 mvp = projection * model * view;
 	shader.Use();
 	{
-		glUniformMatrix4fv(shader("model"),		 1, 0, glm::value_ptr(model));
-		glUniformMatrix4fv(shader("view"),		 1, 0, glm::value_ptr(view));
-		glUniformMatrix4fv(shader("projection"), 1, 0, glm::value_ptr(projection));
+		glUniformMatrix4fv(shader("MVP"), 1, 0, glm::value_ptr(mvp));
 	}
 
 	glUniform4f(Color, 1, 1, 1, 1);
@@ -207,7 +209,7 @@ int main(int argc, char * argv[])
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, true);
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 
-	GLFWwindow * window = glfwCreateWindow(640, 480, "", nullptr, nullptr);
+	GLFWwindow * window = glfwCreateWindow(1, 1, "", nullptr, nullptr);
 	if (!window)
 	{
 		glfwTerminate();
@@ -219,7 +221,7 @@ int main(int argc, char * argv[])
 	glfwSetWindowRefreshCallback(window, display);
 
 	glfwMakeContextCurrent(window);
-	//glfwSwapInterval(1);
+	glfwSwapInterval(1);
 
 	setAfterCallback([](const FunctionCall &)
 	{
