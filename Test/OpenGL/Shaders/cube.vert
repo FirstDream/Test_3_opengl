@@ -1,6 +1,4 @@
 uniform mat4 MVP;
-
-
 uniform vec4 Color;
 
 attribute vec3 vertex;

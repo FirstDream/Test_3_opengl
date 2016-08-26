@@ -13,6 +13,10 @@
 
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/common.hpp>
+
+#include "VertexBuffer.h"
+
 
 using namespace gl;
 
@@ -23,150 +27,95 @@ GLenum err;
 //#define GL_CHECK_ERRORS assert(glGetError()== GL_NO_ERROR);
 
 Rect2d::Rect2d()
-: a_vertex(-1)
-, m_vao(0)
-, m_indices(0)
-, m_vertices(0)
-, m_texture(0)
-
+	:texture_id_(0)
 {
-
 	//init shader;
 	std::string vert_file = "./OpenGL/Shaders/rect.vert";
 	std::string frag_file = "./OpenGL/Shaders/rect.frag";
 
-	this->m_shader = new GLSLShader();
+	this->shader_ = new GLSLShader();
 
-	m_shader->LoadFromFile( GL_VERTEX_SHADER, vert_file );
-	m_shader->LoadFromFile( GL_FRAGMENT_SHADER, frag_file );
-	m_shader->CreateAndLinkProgram();
+	shader_->LoadFromFile( GL_VERTEX_SHADER, vert_file );
+	shader_->LoadFromFile( GL_FRAGMENT_SHADER, frag_file );
+	shader_->CreateAndLinkProgram();
 	
-	m_shader->Use();
+	shader_->Use();
 	{
-		m_shader->AddUniform("MVP");
-		m_shader->AddUniform("Texture");
-		glUniform1i((*m_shader)("Texture"), 0);
-		m_shader->AddAttribute("vVertices");
-		m_shader->AddAttribute("vTexCoord");
+		shader_->AddUniform("MVP");
+		shader_->AddUniform("Texture");
+		shader_->AddUniform("vWindowColor");
+		glUniform1i((*shader_)("Texture"), 0);
+		shader_->AddAttribute("vVertex");
+		shader_->AddAttribute("vTexCoord");
 	}
-	m_shader->UnUse();
+	shader_->UnUse();
 
 	GL_CHECK_ERRORS
     
-		// create 
-	static const GLfloat vertices_pos[16] =
-    {
-		-1.0f, -1.0f, 1.0f, 1.0f, // 0
-		 1.0f, -1.0f, 1.0f, 1.0f, // 1
-		 1.0f,  1.0f, 1.0f, 1.0f, // 2
-		-1.0f,  1.0f, 1.0f, 1.0f  // 3
-    };
+	typedef struct { float x, y, z; } xyz;
+	typedef struct { float s, t; } st;
+	typedef struct { xyz position; st texcoord; } vertex;
+	
+	xyz v[] = 
+	{ { -1, -1, 1 },{ 1, -1, 1 },{ 1, 1, 1 },{ -1, 1, 1 }, };
+	
+	st n[] = { { 0, 1 },{ 1, 1 },{ 1, 0 }, { 0, 0 } };
+	
+	vertex vertices[4] = {
+		{ v[0],n[0] },
+		{ v[1],n[1] },
+		{ v[2],n[2] },
+		{ v[3],n[3] },};
 
-	static const GLfloat texture_pos[8] =
-	{
-		1.0f, 1.0f,
-		1.0f, 0.0f,
-		0.0f, 1.0f,
-		0.0f, 0.0f
-	};
+	GLuint indices[6] = { 0, 1, 2, 0, 2, 3 };
 
-    static const GLubyte indices_data[6] = 
-	{ 0, 1, 2, 0, 2, 3 };
+	this->vertex_buffer_ = new VertexBuffer("vVertex:3f,vTexCoord:2f");
+	this->vertex_buffer_->push_back(vertices, 4, indices, 6);
 
-    glGenVertexArrays(1, &m_vao);
-    glBindVertexArray(m_vao);
-	GL_CHECK_ERRORS
-    glGenBuffers(1, &m_vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, m_vertices);
-	GL_CHECK_ERRORS
-    glBufferData(GL_ARRAY_BUFFER, 24 *sizeof(GLfloat), nullptr, GL_STATIC_DRAW);
-	GL_CHECK_ERRORS
-	glBufferSubData(GL_ARRAY_BUFFER, 0, 16 * sizeof(GLfloat), vertices_pos);
-	GL_CHECK_ERRORS
-	glBufferSubData(GL_ARRAY_BUFFER, 8 * sizeof(GLfloat), 16 * sizeof(GLfloat), texture_pos);
-	GL_CHECK_ERRORS
-	glEnableVertexAttribArray( (*m_shader)["vVertices"]);
-	glVertexAttribPointer( (*m_shader)["vVertices"], 4, GL_FLOAT, GL_FALSE, 0, NULL);
-	GL_CHECK_ERRORS
-	glEnableVertexAttribArray((*m_shader)["vTexCoord"]);
-	glVertexAttribPointer((*m_shader)["vTexCoord"], 2, GL_FLOAT, GL_FALSE, 0, (const GLvoid *)sizeof(vertices_pos));
-	GL_CHECK_ERRORS
-    glGenBuffers(1, &m_indices);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_indices);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices_data), indices_data, GL_STATIC_DRAW);
-	GL_CHECK_ERRORS
-	glClearColor(0.f, 0.f, 0.f, 1.0f);
-	GL_CHECK_ERRORS
-    // view
-    m_view = glm::lookAt( glm::vec3(0.f, 0.0f,0.0f),glm::vec3( 0.f, 0.0f, 1.0f ), glm::vec3( 0.f, 1.f, 0.f) );
 }
 
 Rect2d::~Rect2d()
 {
-    glDeleteBuffers(1, &m_vertices);
-    glDeleteBuffers(1, &m_indices);
-	
-	delete this->m_shader;
+
+	delete this->vertex_buffer_;
+	delete this->shader_;
 
 }
 
 void Rect2d::resize(int width, int height)
 {
-    m_projection = glm::perspective(40.f, static_cast<GLfloat>(width) / static_cast<GLfloat>(height), 0.1f, 10000.0f);
-
-    glViewport(0, 0, width, height);
-	GL_CHECK_ERRORS
 	this->w_ = width;
 	this->h_ = height;
 }
 
-void Rect2d::draw()
+void Rect2d::draw( glm::mat4& MVP )
 {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	//this->m_shader->Use();
-    //const glm::mat4 MVP = m_projection * m_view;
-	//err = glGetError();
-	//GL_CHECK_ERRORS
-    //glUniformMatrix4fv( (*m_shader)( "MVP" ), 1, GL_FALSE, glm::value_ptr( MVP ) );
-	//GL_CHECK_ERRORS
-	//glBindVertexArray(this->m_vao);
-	//glDrawElements( GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL );
-	//GL_CHECK_ERRORS
-	//glBindVertexArray(0);
-	//this->m_shader->UnUse();
-	//GL_CHECK_ERRORS
-
-	glMatrixMode(GL_PROJECTION);
-	//glOrtho(0, w_, 0, h_, -1, 1);
-	glm::mat4  proj = glm::perspective(60.f, static_cast<GLfloat>(w_) / static_cast<GLfloat>(h_), 0.1f, 10000.0f);
-	glLoadMatrixf(glm::value_ptr(m_projection));
-	glMatrixMode(GL_MODELVIEW);
-	glm::mat4 view = glm::lookAt(glm::vec3(0.f, 0.0f, 0.0f), glm::vec3(0.f, 0.0f, 1.0f), glm::vec3(0.f, 1.f, 0.f));
-	glLoadMatrixf(glm::value_ptr(m_view));
-	
-	glColor3f(1.0, 0.0, 1.0);
-	glBegin(GL_QUADS);
+	shader_->Use();
+	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, texture_id_);
 	{
-		glVertex3d( -2.0, -2.0, 1.0 );
-		glVertex3d(  2.0, -2.0, 1.0 );
-		glVertex3d(  2.0,  2.0, 1.0);
-		glVertex3d( -2.0,  2.0, 1.0 );
+		glUniformMatrix4fv( (*shader_)("MVP"), 1, 0, glm::value_ptr(MVP) );
+		glUniform2fv((*shader_)("vWindowColor"), 1, glm::value_ptr(this->window_color_normal_));
+		this->vertex_buffer_->render(GL_TRIANGLES);
 	}
-	glEnd();
+	glBindTexture(GL_TEXTURE_2D, 0);
+	shader_->UnUse();
+
+
 }
 
 void Rect2d::updateTexture(cv::Mat & data)
 {
-	if ( m_texture == 0 )
+	if ( texture_id_ == 0 )
 	{
-		glGenTextures(1, &m_texture);
+		glGenTextures(1, &texture_id_);
 		//glDeleteTextures(1, &m_texture);
 	}
 		 
 	//glGenTextures(1, &m_texture);
 
-	glBindTexture(GL_TEXTURE_2D, m_texture);
+	glBindTexture(GL_TEXTURE_2D, texture_id_);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -175,25 +124,52 @@ void Rect2d::updateTexture(cv::Mat & data)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	int a = data.type();
-
 	GLenum type;
 	switch ( a )
 	{
 	case CV_16U:
 		type = GL_UNSIGNED_SHORT;
+		this->max_val_ = 65535;
+		this->min_val_ = 0;
 		break;
 
 	case CV_16S:
 		type = GL_SHORT;
+		this->max_val_ = 32767;
+		this->min_val_ = -32768;
 		break;
 	
 	default:
-		type = GL_BYTE;
+		type = GL_UNSIGNED_BYTE;
+		this->max_val_ = 255;
+		this->min_val_ = 0;
+		this->window_color_[0] = 127.5;
+		this->window_color_[1] = 256;
 		break;
 	}
+	this->window_color_[0] = 1471;
+	this->window_color_[1] = 2340;
 
-	glTexImage2D( GL_TEXTURE_2D,0, GL_R16F, data.cols, data.rows,0, GL_LUMINANCE, type, data.ptr() );
+	this->editWindowColor(glm::dvec2( 0, 0 ));
+	glTexImage2D( GL_TEXTURE_2D,0, GL_LUMINANCE16F_ARB, data.cols, data.rows,0, GL_LUMINANCE, type, data.ptr() );
+
 	glBindTexture(GL_TEXTURE_2D, 0);
 	
+}
+
+void Rect2d::editWindowColor(glm::dvec2 delta)
+{
+
+	this->window_color_ += delta;
+
+	this->window_color_[0] = glm::clamp(this->window_color_[0], float(this->min_val_), float(this->max_val_));
+
+	this->window_color_[1] = glm::clamp(this->window_color_[1], float(1), float(this->max_val_ - this->min_val_ + 1));
+
+	this->window_color_normal_[1] = window_color_[1] / max_val_;
+	this->window_color_normal_[0] = window_color_[0] / max_val_;
+
+	std::cout << this->window_color_[0] << ", " << this->window_color_[1] << std::endl;
+
 }
 

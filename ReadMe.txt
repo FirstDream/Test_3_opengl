@@ -1,4 +1,8 @@
 参考freetype-gl 
+实现VertexBuffer;
 
-Sth is wrong!
+好
+
+
+
 

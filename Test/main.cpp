@@ -6,9 +6,9 @@
 
 #include <iostream>
 
-//#include <opencv2\opencv.hpp>
-//#include <opencv2\core\utility.hpp>
-//#include <opencv2\viz.hpp>
+#include <opencv2\opencv.hpp>
+#include <opencv2\core\utility.hpp>
+#include <opencv2\viz.hpp>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -34,9 +34,10 @@ using namespace glbinding;
 #include "VertexBuffer.h"
 #include "GLSLShader.h"
 
-VertexBuffer* cube;
+Rect2d* rect_;
 glm::mat4 model, view, projection;
-GLSLShader shader;
+
+int w = 640, h = 480;
 
 void error(int errnum, const char * errmsg)
 {
@@ -80,111 +81,47 @@ void resize(GLFWwindow * /*window*/, int width, int height)
 	glViewport(0, 0, width, height);
 
 	projection = glm::perspective(45.0f, static_cast<GLfloat>(width) / static_cast<GLfloat>(height), 0.1f, 1000.0f);
+
+	w = width;
+	h = height;
+	rect_->resize(w, h);
 }
 
 
 void init()
 {
-	std::string vert_file = "./OpenGL/Shaders/cube.vert";
-	std::string frag_file = "./OpenGL/Shaders/cube.frag";
-	shader.LoadFromFile(GL_VERTEX_SHADER, vert_file);
-	shader.LoadFromFile(GL_FRAGMENT_SHADER, frag_file);
-	shader.CreateAndLinkProgram();
-	shader.Use();
-	{
-		shader.AddUniform("MVP");
-		shader.AddUniform("Color");
-		shader.AddAttribute("vertex");
-		shader.AddAttribute("normal");
-		shader.AddAttribute("color");
-	}
-	shader.UnUse();
-
-	typedef struct { float x, y, z; } xyz;
-	typedef struct { float r, g, b, a; } rgba;
-	typedef struct { xyz position, normal; rgba color; } vertex;
-	xyz v[] = { { 1, 1, 1 },{ -1, 1, 1 },{ -1,-1, 1 },{ 1,-1, 1 },
-	{ 1,-1,-1 },{ 1, 1,-1 },{ -1, 1,-1 },{ -1,-1,-1 } };
-	xyz n[] = { { 0, 0, 1 },{ 1, 0, 0 },{ 0, 1, 0 } ,
-	{ -1, 0, 1 },{ 0,-1, 0 },{ 0, 0,-1 } };
-	rgba c[] = { { 1, 1, 1, 1 },{ 1, 1, 0, 1 },{ 1, 0, 1, 1 },{ 0, 1, 1, 1 },
-	{ 1, 0, 0, 1 },{ 0, 0, 1, 1 },{ 0, 1, 0, 1 },{ 0, 0, 0, 1 } };
-	vertex vertices[24] = {
-		{ v[0],n[0],c[0] },{ v[1],n[0],c[1] },{ v[2],n[0],c[2] },{ v[3],n[0],c[3] },
-		{ v[0],n[1],c[0] },{ v[3],n[1],c[3] },{ v[4],n[1],c[4] },{ v[5],n[1],c[5] },
-		{ v[0],n[2],c[0] },{ v[5],n[2],c[5] },{ v[6],n[2],c[6] },{ v[1],n[2],c[1] },
-		{ v[1],n[3],c[1] },{ v[6],n[3],c[6] },{ v[7],n[3],c[7] },{ v[2],n[3],c[2] },
-		{ v[7],n[4],c[7] },{ v[4],n[4],c[4] },{ v[3],n[4],c[3] },{ v[2],n[4],c[2] },
-		{ v[4],n[5],c[4] },{ v[7],n[5],c[7] },{ v[6],n[5],c[6] },{ v[5],n[5],c[5] } };
-	GLuint indices[24] = { 0, 1, 2, 3,    4, 5, 6, 7,   8, 9,10,11,
-		12,13,14,15,  16,17,18,19,  20,21,22,23 };
-
-	cube =  new VertexBuffer("vertex:3f,normal:3f,color:4f");
-	cube->push_back(vertices, 24, indices, 24);
-	
 	projection = glm::mat4(1.0);
 	model = glm::mat4(1.0);
 	view = glm::mat4(1.0);
 
-	glPolygonOffset(1, 1);
 	glClearColor(0.0, 0.0, 0.0, 1.0);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_COLOR_MATERIAL);
-	glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_LINE_SMOOTH);
 
-	cube->print();
+
+	const char* file = "./Resources/3.dcm";
+	cv::Mat im = cv::imread(file, cv::IMREAD_GRAYSCALE);
+	//cv::Mat blurred;
+	//cv::GaussianBlur(im, blurred, cv::Size(), 5, 5);
+	rect_->updateTexture(im);
+
 }
 
 void display(GLFWwindow* window)
 {
-	static float theta = 0, phi = 0;
-	static GLuint Color = 0;
 	double seconds_elapsed = glfwGetTime();
-
-	if (!Color)
-	{
-		Color = shader("Color");
-	}
-	assert(glGetError() == GL_NO_ERROR);
-	theta = .5f * seconds_elapsed / 0.016f;
-	phi = .5f * seconds_elapsed / 0.016f;
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	model = glm::mat4(1);
-	model = glm::rotate(model, glm::radians(theta), glm::vec3(0, 0, 1));
-	model = glm::rotate(model, glm::radians(phi), glm::vec3(0, 1, 0));
-	//model = glm::translate(model, glm::vec3(0.0, 0.0, -5.0) );
+	model = glm::mat4(1.0);
+	//glm::mat4 r1  = glm::rotate(glm::mat4(1.0), glm::radians(theta), glm::vec3(0, 0, 1));
+	//glm::mat4 r2  = glm::rotate(glm::mat4(1.0), glm::radians(phi), glm::vec3(0, 1, 0));
+	//glm::mat4 t1  = glm::translate(glm::mat4(1.0), glm::vec3(0.0, 0.0, -5.0) );
+	//model = r1* r2;
+	//model = t1;
+	view = glm::lookAt(glm::vec3(0, 0, 3), glm::vec3(0, 0, 1), glm::vec3(0, 1, 0));
 
-	//view = glm::lookAt(glm::vec3(0,0,-1), glm::vec3(0,0,0), glm::vec3(0,1,0));
+	glm::mat4 mvp = projection * view * model;
 
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_POLYGON_OFFSET_FILL);
-
-	glm::mat4 mvp = projection * model * view;
-	shader.Use();
-	{
-		glUniformMatrix4fv(shader("MVP"), 1, 0, glm::value_ptr(mvp));
-	}
-
-	glUniform4f(Color, 1, 1, 1, 1);
-	cube->render(GL_QUADS);
-
-	glDisable(GL_POLYGON_OFFSET_FILL);
-	glEnable(GL_BLEND);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	glDepthMask(GL_FALSE);
-
-	glUniform4f(Color, 0, 0, 0, .5);
-	cube->render( GL_QUADS);
-
-	shader.UnUse();
-
-	glDepthMask(GL_TRUE);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	rect_->draw(mvp);
 
 	glfwSwapBuffers(window);
 }
@@ -216,9 +153,9 @@ int main(int argc, char * argv[])
 		return -1;
 	}
 
-	glfwSetKeyCallback(window, key_callback);
 	glfwSetFramebufferSizeCallback(window, resize);
 	glfwSetWindowRefreshCallback(window, display);
+	glfwSetKeyCallback(window, key_callback);
 
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(1);
@@ -240,8 +177,9 @@ int main(int argc, char * argv[])
 		<< "OpenGL Renderer: " << ContextInfo::renderer() << std::endl;
 
 
-	init();
+	rect_ = new Rect2d();
 
+	init();
 
 	int width, height; 
 
@@ -257,7 +195,7 @@ int main(int argc, char * argv[])
 		display(window);
 	}
 
-	delete cube;
+	delete rect_;
 
 	glfwDestroyWindow(window);
 	glfwTerminate();

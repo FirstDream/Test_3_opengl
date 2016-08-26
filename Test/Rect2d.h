@@ -10,35 +10,40 @@
 
 #include <opencv2\opencv.hpp>
 
-
 class GLSLShader;
+class VertexBuffer;
 
 class Rect2d
 {
 public:
-	Rect2d();
+	explicit Rect2d();
 	~Rect2d();
 
 	void resize(int width, int height);
-	void draw();
+	void draw( glm::mat4& MVP );
 
 	void updateTexture(cv::Mat& data);
 
+	void editWindowColor(glm::dvec2 delta);
+
 protected:
-	gl::GLint a_vertex;
 
-	gl::GLuint m_vao;
-	gl::GLuint m_indices;
-	gl::GLuint m_vertices;
-	gl::GLuint m_texture;
 
-	GLSLShader* m_shader;
+	gl::GLuint texture_id_;
 
-	glm::mat4 m_view;
-	glm::mat4 m_projection;
+	VertexBuffer* vertex_buffer_;
 
+	GLSLShader* shader_;
 
 	int w_;
 	int h_;
+
+	int max_val_;
+	int min_val_;
+
+	//0--center;
+	//1--width;
+	glm::vec2 window_color_;
+	glm::vec2 window_color_normal_;
 
 };
